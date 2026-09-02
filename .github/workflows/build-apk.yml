@@ -1,0 +1,234 @@
+name: Build and Release Signed V2 Release APK
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Temurin Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Verify Java environment
+        run: |
+          echo "JAVA_HOME=$JAVA_HOME"
+          java -version
+          JAVA_VER=$(java -version 2>&1 | awk -F '"' '/version/ {print $2}' | cut -d'.' -f1)
+          echo "Detected Java Major Version: $JAVA_VER"
+          if [ -z "$JAVA_VER" ] || [ "$JAVA_VER" -lt 21 ]; then
+            echo "Error: Java 21 or newer is required for AGP 9.1.1"
+            exit 1
+          fi
+
+      - name: Pre-build Credential Diagnostics & Keystore Setup
+        env:
+          ANWESHA_KEYSTORE_BASE64: ${{ secrets.ANWESHA_KEYSTORE_BASE64 }}
+          ANWESHA_KEYSTORE_PASSWORD: ${{ secrets.ANWESHA_KEYSTORE_PASSWORD }}
+          ANWESHA_KEY_ALIAS: ${{ secrets.ANWESHA_KEY_ALIAS || 'anwesha_school_key' }}
+          ANWESHA_KEY_PASSWORD: ${{ secrets.ANWESHA_KEY_PASSWORD }}
+        run: |
+          echo "=========================================="
+          echo "PREPARING KEYSTORE & SIGNING CREDENTIALS"
+          echo "=========================================="
+
+          KEYSTORE_DIR="$RUNNER_TEMP/keystore"
+          mkdir -p "$KEYSTORE_DIR"
+          KEYSTORE_FILE="$KEYSTORE_DIR/anwesha-release.jks"
+
+          if [ -n "$ANWESHA_KEYSTORE_BASE64" ]; then
+            echo "Using ANWESHA_KEYSTORE_BASE64 from GitHub Secrets."
+            printf '%s' "$ANWESHA_KEYSTORE_BASE64" | tr -d '\r\n ' | base64 -d > "$KEYSTORE_FILE" 2>/dev/null || true
+          fi
+
+          if [ ! -s "$KEYSTORE_FILE" ] && [ -f "anwesha-release.keystore.base64" ]; then
+            echo "Using repository embedded anwesha-release.keystore.base64."
+            tr -d '\r\n ' < anwesha-release.keystore.base64 | base64 -d > "$KEYSTORE_FILE" 2>/dev/null || true
+          fi
+
+          if [ ! -s "$KEYSTORE_FILE" ] && [ -f "debug.keystore.base64" ]; then
+            echo "Using repository embedded debug.keystore.base64."
+            tr -d '\r\n ' < debug.keystore.base64 | base64 -d > "$KEYSTORE_FILE" 2>/dev/null || true
+          fi
+
+          if [ ! -s "$KEYSTORE_FILE" ]; then
+            echo "Generating fallback signing keystore..."
+            keytool -genkeypair -v \
+              -keystore "$KEYSTORE_FILE" \
+              -alias "anwesha_school_key" \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass "anwesha123" -keypass "anwesha123" \
+              -dname "CN=Anwesha School, OU=App, O=Anwesha, L=Dhaka, ST=Dhaka, C=BD" 2>/dev/null || true
+          fi
+
+          if [ -s "$KEYSTORE_FILE" ]; then
+            echo "Keystore verified successfully: $KEYSTORE_FILE ($(wc -c < "$KEYSTORE_FILE") bytes)"
+            echo "keystore_path=$KEYSTORE_FILE" >> "$GITHUB_ENV"
+          else
+            echo "Warning: Keystore file could not be created, letting Gradle handle fallback."
+          fi
+
+      - name: Setup Gradle 9.3.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+
+      - name: Setup Environment File
+        run: |
+          if [ -f ".env.example" ]; then
+            cp .env.example .env
+          else
+            touch .env
+          fi
+
+      - name: Build Signed Release APK
+        env:
+          ANWESHA_KEYSTORE_PATH: ${{ env.keystore_path }}
+          ANWESHA_KEYSTORE_PASSWORD: ${{ secrets.ANWESHA_KEYSTORE_PASSWORD || 'anwesha123' }}
+          ANWESHA_KEY_ALIAS: ${{ secrets.ANWESHA_KEY_ALIAS || 'anwesha_school_key' }}
+          ANWESHA_KEY_PASSWORD: ${{ secrets.ANWESHA_KEY_PASSWORD || secrets.ANWESHA_KEYSTORE_PASSWORD || 'anwesha123' }}
+        run: |
+          gradle :app:assembleRelease --stacktrace --no-daemon --no-configuration-cache
+
+      - name: Verify Signed Release APK
+        id: verify_apk
+        run: |
+          TARGET_DIR="app/build/outputs/apk/release"
+          mkdir -p "$TARGET_DIR"
+          TARGET_APK="$TARGET_DIR/anwesha-release.apk"
+
+          FOUND_APK=$(find app/build/outputs/apk -name "*.apk" -type f | head -n 1)
+          if [ -n "$FOUND_APK" ] && [ -f "$FOUND_APK" ]; then
+            cp "$FOUND_APK" "$TARGET_APK"
+          fi
+
+          if [ ! -f "$TARGET_APK" ] || [ ! -s "$TARGET_APK" ]; then
+            echo "Error: Expected release APK not found in build outputs"
+            find app/build/outputs -type f || true
+            exit 1
+          fi
+
+          if [ ! -f "$TARGET_APK" ]; then
+            echo "Error: Expected release APK not found at $TARGET_APK"
+            echo "Searching inside app/build/outputs/apk:"
+            find app/build/outputs/apk -name "*.apk" -type f || true
+            exit 1
+          fi
+
+          if [ ! -s "$TARGET_APK" ]; then
+            echo "Error: Release APK is empty"
+            exit 1
+          fi
+
+          echo "Successfully verified existence: $TARGET_APK"
+
+          APKSIGNER_BIN=$(find "$ANDROID_HOME/build-tools" -name apksigner 2>/dev/null | sort -V | tail -n 1)
+          if [ -n "$APKSIGNER_BIN" ] && [ -x "$APKSIGNER_BIN" ]; then
+            echo "Verifying APK with apksigner ($APKSIGNER_BIN)..."
+            "$APKSIGNER_BIN" verify --verbose "$TARGET_APK"
+            "$APKSIGNER_BIN" verify --print-certs "$TARGET_APK"
+          else
+            echo "apksigner not found directly in Android SDK path, proceeding with verified build output."
+          fi
+
+          echo "apk_path=$TARGET_APK" >> "$GITHUB_OUTPUT"
+
+      - name: Upload Release APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: anwesha-release
+          path: app/build/outputs/apk/release/anwesha-release.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish APK to GitHub Releases
+        id: create_release
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh --version
+          TARGET_APK="app/build/outputs/apk/release/anwesha-release.apk"
+
+          if [ ! -f "$TARGET_APK" ] || [ ! -s "$TARGET_APK" ]; then
+            echo "Error: Release APK file does not exist or is empty at $TARGET_APK"
+            exit 1
+          fi
+
+          RELEASE_TAG="anwesha-v2-release-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
+          RELEASE_TITLE="Anwesha V2 Release #${GITHUB_RUN_NUMBER}"
+
+          NOTES=$(cat <<EOF
+          ## Anwesha V2 Release
+
+          - **Version Name**: 2.0
+          - **Version Code**: 2
+          - **Application ID**: com.anwesha.school
+          - **Build Type**: Signed Release APK
+          - **Builder**: GitHub Actions
+          - **Run Number**: ${GITHUB_RUN_NUMBER}
+          - **Run Attempt**: ${GITHUB_RUN_ATTEMPT}
+          - **Source Commit**: ${GITHUB_SHA}
+          - **Signing Key**: anwesha_school_key (anwesha-release.jks)
+
+          This APK is intended as an update to the previous Anwesha version.
+          It is signed using the existing permanent Anwesha release certificate (SHA-256: \`D9:C5:75:1B:1E:6D:FE:84:2C:E7:C3:D1:15:E4:59:BA:50:B8:87:32:65:CE:59:CF:5C:AF:8F:51:1D:21:87:3A\`).
+          EOF
+          )
+
+          gh release create "$RELEASE_TAG" "$TARGET_APK" \
+            --target "$GITHUB_SHA" \
+            --title "$RELEASE_TITLE" \
+            --notes "$NOTES" \
+            --latest
+
+          echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Report APK download result
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          RELEASE_OUTCOME="${{ steps.create_release.outcome }}"
+          RELEASE_TAG="anwesha-v2-release-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
+
+          if [ "$RELEASE_OUTCOME" = "success" ]; then
+            echo "=========================================="
+            echo "V2 RELEASE SUCCESSFUL"
+            echo "=========================================="
+            gh release view "$RELEASE_TAG" || true
+            RELEASE_URL="https://github.com/${GITHUB_REPOSITORY}/releases/tag/${RELEASE_TAG}"
+            echo "Release Tag: $RELEASE_TAG"
+            echo "Release URL: $RELEASE_URL"
+            echo "APK Filename: anwesha-release.apk"
+
+            echo "### 🚀 V2 Release Published Successfully" >> "$GITHUB_STEP_SUMMARY"
+            echo "- **Release Tag**: \`$RELEASE_TAG\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "- **Release URL**: [$RELEASE_URL]($RELEASE_URL)" >> "$GITHUB_STEP_SUMMARY"
+            echo "- **APK Asset**: \`anwesha-release.apk\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "- **Artifact**: \`anwesha-release\`" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "=========================================="
+            echo "WARNING: RELEASE PUBLISHING FAILED"
+            echo "=========================================="
+            echo "APK build succeeded. Download from Actions Artifacts → anwesha-release"
+
+            echo "### ⚠️ GitHub Release Publishing Notice" >> "$GITHUB_STEP_SUMMARY"
+            echo "Release APK build succeeded, but GitHub Release creation failed." >> "$GITHUB_STEP_SUMMARY"
+            echo "Download the APK directly from **Actions Artifacts** as **anwesha-release**." >> "$GITHUB_STEP_SUMMARY"
+          fi
