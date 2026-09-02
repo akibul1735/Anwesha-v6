@@ -46,17 +46,39 @@ android {
       val keystorePropertiesFile = rootProject.file("keystore.properties")
       val keystoreProperties = Properties()
       if (keystorePropertiesFile.exists()) {
-        FileInputStream(keystorePropertiesFile).use { stream ->
-          keystoreProperties.load(stream)
-        }
+        try {
+          FileInputStream(keystorePropertiesFile).use { stream ->
+            keystoreProperties.load(stream)
+          }
+        } catch (_: Exception) {}
       }
 
-      val envKeystorePath = System.getenv("ANWESHA_KEYSTORE_PATH")
-        ?: keystoreProperties.getProperty("storeFile")
-        ?: System.getenv("KEYSTORE_PATH")
+      fun getNonEmptyEnv(vararg keys: String): String? {
+        for (key in keys) {
+          val v = System.getenv(key)?.trim()
+          if (!v.isNullOrEmpty()) return v
+        }
+        return null
+      }
+
+      fun getNonEmptyProp(vararg keys: String): String? {
+        for (key in keys) {
+          val v = keystoreProperties.getProperty(key)?.trim()
+          if (!v.isNullOrEmpty()) return v
+        }
+        return null
+      }
+
+      val envKeystorePath = getNonEmptyEnv("ANWESHA_KEYSTORE_PATH", "KEYSTORE_PATH")
+        ?: getNonEmptyProp("storeFile")
         ?: "${rootDir}/anwesha-release.jks"
 
-      var targetKeystore = file(envKeystorePath)
+      var targetKeystore = try {
+        if (envKeystorePath.isNotBlank()) file(envKeystorePath) else rootProject.file("anwesha-release.jks")
+      } catch (_: Exception) {
+        rootProject.file("anwesha-release.jks")
+      }
+
       if (!targetKeystore.exists() || targetKeystore.length() == 0L) {
         val base64File = rootProject.file("anwesha-release.keystore.base64")
         if (base64File.exists()) {
@@ -70,19 +92,18 @@ android {
 
       if (targetKeystore.exists() && targetKeystore.length() > 0L) {
         storeFile = targetKeystore
-        storePassword = System.getenv("ANWESHA_KEYSTORE_PASSWORD")
-          ?: keystoreProperties.getProperty("storePassword")
-          ?: System.getenv("STORE_PASSWORD")
+        storePassword = getNonEmptyEnv("ANWESHA_KEYSTORE_PASSWORD", "STORE_PASSWORD")
+          ?: getNonEmptyProp("storePassword")
           ?: "anwesha123"
-        keyAlias = System.getenv("ANWESHA_KEY_ALIAS")
-          ?: keystoreProperties.getProperty("keyAlias")
+        keyAlias = getNonEmptyEnv("ANWESHA_KEY_ALIAS", "KEY_ALIAS")
+          ?: getNonEmptyProp("keyAlias")
           ?: "anwesha_school_key"
-        keyPassword = System.getenv("ANWESHA_KEY_PASSWORD")
-          ?: keystoreProperties.getProperty("keyPassword")
-          ?: System.getenv("KEY_PASSWORD")
-          ?: storePassword
+        val resolvedStorePass = storePassword
+        keyPassword = getNonEmptyEnv("ANWESHA_KEY_PASSWORD", "KEY_PASSWORD")
+          ?: getNonEmptyProp("keyPassword")
+          ?: resolvedStorePass
       } else {
-        val debugKeystore = file("${rootDir}/debug.keystore")
+        val debugKeystore = rootProject.file("debug.keystore")
         if (!debugKeystore.exists() || debugKeystore.length() == 0L) {
           val debugBase64 = rootProject.file("debug.keystore.base64")
           if (debugBase64.exists()) {

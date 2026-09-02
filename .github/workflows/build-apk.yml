@@ -141,10 +141,10 @@ jobs:
 
       - name: Build Signed Release APK
         env:
-          ANWESHA_KEYSTORE_PATH: ${{ env.keystore_path }}
-          ANWESHA_KEYSTORE_PASSWORD: ${{ secrets.ANWESHA_KEYSTORE_PASSWORD || 'anwesha123' }}
-          ANWESHA_KEY_ALIAS: ${{ secrets.ANWESHA_KEY_ALIAS || 'anwesha_school_key' }}
-          ANWESHA_KEY_PASSWORD: ${{ secrets.ANWESHA_KEY_PASSWORD || secrets.ANWESHA_KEYSTORE_PASSWORD || 'anwesha123' }}
+          ANWESHA_KEYSTORE_PATH: ${{ env.ANWESHA_KEYSTORE_PATH }}
+          ANWESHA_KEYSTORE_PASSWORD: ${{ env.ANWESHA_KEYSTORE_PASSWORD }}
+          ANWESHA_KEY_ALIAS: ${{ env.ANWESHA_KEY_ALIAS }}
+          ANWESHA_KEY_PASSWORD: ${{ env.ANWESHA_KEY_PASSWORD }}
         run: |
           gradle :app:assembleRelease --stacktrace --no-daemon --no-configuration-cache
 
