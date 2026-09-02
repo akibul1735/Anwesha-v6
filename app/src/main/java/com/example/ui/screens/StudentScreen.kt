@@ -33,6 +33,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -1025,7 +1026,10 @@ fun ClassDropdownQuickFilter(
             label = {
                 Text(
                     text = labelText,
-                    fontSize = 11.sp
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis
                 )
             },
             trailingIcon = {
@@ -1083,7 +1087,10 @@ fun GenderDropdownQuickFilter(
             label = {
                 Text(
                     text = labelText,
-                    fontSize = 11.sp
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis
                 )
             },
             trailingIcon = {
@@ -1134,10 +1141,10 @@ fun StatusDropdownQuickFilter(
         else -> {
             val names = selectedStatuses.map {
                 when (it) {
-                    "Current" -> "বর্তমান"
-                    "Former" -> "সাবেক"
-                    "Transferred" -> "বদলীকৃত"
-                    "Inactive" -> "নিষ্ক্রিয়"
+                    "Current", "Active", "সক্রিয়" -> "বর্তমান"
+                    "Former", "সাবেক" -> "সাবেক"
+                    "Transferred", "বদলীকৃত" -> "বদলীকৃত"
+                    "Inactive", "নিষ্ক্রিয়" -> "নিষ্ক্রিয়"
                     else -> it
                 }
             }
@@ -1149,7 +1156,15 @@ fun StatusDropdownQuickFilter(
         FilterChip(
             selected = isFiltered,
             onClick = { expanded = true },
-            label = { Text(displayLabel, fontSize = 11.sp) },
+            label = {
+                Text(
+                    text = displayLabel,
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis
+                )
+            },
             trailingIcon = {
                 Icon(Icons.Filled.ArrowDropDown, contentDescription = null, modifier = Modifier.size(16.dp))
             }
@@ -1168,10 +1183,10 @@ fun StatusDropdownQuickFilter(
             )
             options.filter { it != "ALL" }.forEach { opt ->
                 val label = when (opt) {
-                    "Current" -> "বর্তমান (Current)"
-                    "Former" -> "সাবেক (Former)"
-                    "Transferred" -> "বদলীকৃত (Transferred)"
-                    "Inactive" -> "নিষ্ক্রিয় (Inactive)"
+                    "Current", "Active", "সক্রিয়" -> "বর্তমান"
+                    "Former", "সাবেক" -> "সাবেক"
+                    "Transferred", "বদলীকৃত" -> "বদলীকৃত"
+                    "Inactive", "নিষ্ক্রিয়" -> "নিষ্ক্রিয়"
                     else -> opt
                 }
                 val isSelected = selectedStatuses.contains(opt)
@@ -1212,7 +1227,10 @@ fun VillageDropdownQuickFilter(
             label = {
                 Text(
                     text = labelText,
-                    fontSize = 11.sp
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis
                 )
             },
             trailingIcon = {
@@ -1262,7 +1280,15 @@ fun SpecialNeedsQuickFilter(
     FilterChip(
         selected = isFiltered,
         onClick = onToggle,
-        label = { Text(label, fontSize = 11.sp) },
+        label = {
+            Text(
+                text = label,
+                fontSize = 11.sp,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis
+            )
+        },
         leadingIcon = {
             Icon(Icons.Filled.Accessible, contentDescription = null, modifier = Modifier.size(14.dp))
         }
@@ -1293,7 +1319,10 @@ fun CustomFieldDropdownQuickFilter(
             label = {
                 Text(
                     text = labelText,
-                    fontSize = 11.sp
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis
                 )
             },
             trailingIcon = {

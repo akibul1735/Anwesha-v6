@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -1746,18 +1747,34 @@ fun DynamicStudentCard(
                         // Header
                         val headerText = renderAreaText(viewConfig.headerArea, student, customFields, formulaRules, visual.showLabels)
                         if (headerText.isNotBlank()) {
-                            Text(text = headerText, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                            Text(
+                                text = headerText,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
                         }
 
                         // Secondary
                         val secText = renderAreaText(viewConfig.secondaryArea, student, customFields, formulaRules, visual.showLabels)
                         if (secText.isNotBlank()) {
-                            Text(text = secText, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(
+                                text = secText,
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
                         }
                     }
 
                     // Right Side Rows (if any)
-                    Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Column(
+                        horizontalAlignment = Alignment.End,
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                        modifier = Modifier.padding(start = 4.dp).wrapContentWidth()
+                    ) {
                         RenderAreaPills(viewConfig.rightRow1, student, customFields, formulaRules, visual.showLabels)
                         RenderAreaPills(viewConfig.rightRow2, student, customFields, formulaRules, visual.showLabels)
                     }
@@ -1827,7 +1844,9 @@ fun DynamicStudentCard(
                             text = headerText.ifBlank { student.name },
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            fontSize = if (visual.density == "COMPACT") 14.sp else 16.sp
+                            fontSize = if (visual.density == "COMPACT") 14.sp else 16.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
 
                         // Secondary Row
@@ -1838,7 +1857,9 @@ fun DynamicStudentCard(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = accentColor,
                                 fontWeight = FontWeight.SemiBold,
-                                fontSize = if (visual.density == "COMPACT") 11.sp else 12.sp
+                                fontSize = if (visual.density == "COMPACT") 11.sp else 12.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
 
@@ -1849,7 +1870,9 @@ fun DynamicStudentCard(
                                 text = thirdText,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = if (visual.density == "COMPACT") 11.sp else 12.sp
+                                fontSize = if (visual.density == "COMPACT") 11.sp else 12.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
@@ -1858,7 +1881,9 @@ fun DynamicStudentCard(
                     Column(
                         horizontalAlignment = Alignment.End,
                         verticalArrangement = Arrangement.spacedBy(3.dp),
-                        modifier = Modifier.padding(start = 6.dp)
+                        modifier = Modifier
+                            .padding(start = 6.dp)
+                            .wrapContentWidth()
                     ) {
                         // Right Row 1
                         RenderAreaPills(viewConfig.rightRow1, student, customFields, formulaRules, visual.showLabels)
@@ -1892,7 +1917,7 @@ fun DynamicStudentCard(
                             visibleBadges.forEach { bf ->
                                 val badgeVal = FormulaEvaluator.getFieldValue(student, bf.key, customFields, formulaRules)
                                 if (badgeVal.isNotBlank()) {
-                                    val isGood = badgeVal == "অভ্যন্তরীণ" || badgeVal == "Current" || badgeVal == "হ্যাঁ"
+                                    val isGood = badgeVal == "অভ্যন্তরীণ" || badgeVal == "Current" || badgeVal == "বর্তমান" || badgeVal == "সক্রিয়" || badgeVal == "হ্যাঁ"
                                     Surface(
                                         color = if (isGood) Color(0xFFE8F5E9) else Color(0xFFFFF3E0),
                                         shape = RoundedCornerShape(4.dp)
@@ -1902,6 +1927,9 @@ fun DynamicStudentCard(
                                             fontSize = 9.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = if (isGood) Color(0xFF2E7D32) else Color(0xFFE65100),
+                                            maxLines = 1,
+                                            softWrap = false,
+                                            overflow = TextOverflow.Ellipsis,
                                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                         )
                                     }
@@ -1950,7 +1978,11 @@ fun RenderAreaPills(
     val visibleFields = area.fields.filter { it.isVisible && (!it.hasCondition || it.condition?.isMet(student, customFields) == true) }
     if (visibleFields.isEmpty()) return
 
-    Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.wrapContentWidth()
+    ) {
         visibleFields.forEach { f ->
             RenderSingleFieldPillOrIcon(f, student, customFields, formulaRules, globalShowLabels)
         }
@@ -1996,6 +2028,9 @@ fun RenderSingleFieldPillOrIcon(
                         text = "${field.customPrefix}$raw${field.customSuffix}",
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
                     )
                 }
@@ -2023,7 +2058,10 @@ fun RenderSingleFieldPillOrIcon(
                     Text(
                         text = "${field.customPrefix}$labelPrefix$raw${field.customSuffix}",
                         fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
@@ -2042,7 +2080,15 @@ fun RenderSingleFieldPillOrIcon(
                         horizontalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
                         Icon(Icons.Filled.Accessible, contentDescription = "বিশেষ চাহিদা", tint = Color(0xFF512DA8), modifier = Modifier.size(13.dp))
-                        Text("বিশেষ চাহিদা", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFF512DA8))
+                        Text(
+                            text = "বিশেষ চাহিদা",
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF512DA8),
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                 }
             } else if (field.key == "gender") {
@@ -2066,9 +2112,46 @@ fun RenderSingleFieldPillOrIcon(
                             text = raw,
                             fontSize = 9.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (isBoy) Color(0xFF1976D2) else Color(0xFFC2185B)
+                            color = if (isBoy) Color(0xFF1976D2) else Color(0xFFC2185B),
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
+                }
+            } else if (field.key == "status" || raw == "বর্তমান" || raw == "Current" || raw == "সক্রিয়" || raw == "Active" || raw == "সাবেক" || raw == "Former" || raw == "বদলীকৃত" || raw == "Transferred" || raw == "নিষ্ক্রিয়" || raw == "Inactive") {
+                val isCurrent = raw == "বর্তমান" || raw == "Current" || raw == "সক্রিয়" || raw == "Active"
+                val isFormer = raw == "সাবেক" || raw == "Former"
+                val isTransferred = raw == "বদলীকৃত" || raw == "Transferred"
+                val bgCol = when {
+                    isCurrent -> Color(0xFFE8F5E9)
+                    isFormer -> Color(0xFFFFF3E0)
+                    isTransferred -> Color(0xFFE3F2FD)
+                    else -> Color(0xFFFFEBEE)
+                }
+                val txtCol = when {
+                    isCurrent -> Color(0xFF2E7D32)
+                    isFormer -> Color(0xFFEF6C00)
+                    isTransferred -> Color(0xFF1565C0)
+                    else -> Color(0xFFC62828)
+                }
+                val labelPrefix = if (globalShowLabels && field.showLabel && field.label.isNotBlank()) "${field.label}: " else ""
+                val cleanStatus = if (isCurrent) "বর্তমান" else raw
+
+                Surface(
+                    color = bgCol,
+                    shape = RoundedCornerShape(4.dp)
+                ) {
+                    Text(
+                        text = "${field.customPrefix}$labelPrefix$cleanStatus${field.customSuffix}",
+                        fontSize = 9.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = txtCol,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
                 }
             } else {
                 val labelPrefix = if (globalShowLabels && field.showLabel && field.label.isNotBlank()) "${field.label}: " else ""
@@ -2080,6 +2163,9 @@ fun RenderSingleFieldPillOrIcon(
                         text = "${field.customPrefix}$labelPrefix$raw${field.customSuffix}",
                         fontSize = 10.sp,
                         fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
                     )
                 }
@@ -2149,7 +2235,7 @@ fun getIconBgColor(key: String, rawValue: String): Color {
         "isSpecialNeeds" -> Color(0xFFEDE7F6)
         "bloodGroup", "cf_blood" -> Color(0xFFFFEBEE)
         "mobile" -> Color(0xFFE8F5E9)
-        "status" -> if (rawValue == "Current") Color(0xFFE8F5E9) else Color(0xFFFFF3E0)
+        "status" -> if (rawValue == "Current" || rawValue == "বর্তমান" || rawValue == "Active" || rawValue == "সক্রিয়") Color(0xFFE8F5E9) else Color(0xFFFFF3E0)
         else -> Color(0xFFF5F5F5)
     }
 }
@@ -2160,7 +2246,7 @@ fun getIconTintColor(key: String, rawValue: String): Color {
         "isSpecialNeeds" -> Color(0xFF512DA8)
         "bloodGroup", "cf_blood" -> Color(0xFFD32F2F)
         "mobile" -> Color(0xFF2E7D32)
-        "status" -> if (rawValue == "Current") Color(0xFF2E7D32) else Color(0xFFE65100)
+        "status" -> if (rawValue == "Current" || rawValue == "বর্তমান" || rawValue == "Active" || rawValue == "সক্রিয়") Color(0xFF2E7D32) else Color(0xFFE65100)
         else -> Color(0xFF424242)
     }
 }

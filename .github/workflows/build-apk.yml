@@ -38,10 +38,10 @@ jobs:
 
       - name: Pre-build Credential Diagnostics & Keystore Setup
         env:
-          ANWESHA_KEYSTORE_BASE64: ${{ secrets.ANWESHA_KEYSTORE_BASE64 }}
-          ANWESHA_KEYSTORE_PASSWORD: ${{ secrets.ANWESHA_KEYSTORE_PASSWORD }}
-          ANWESHA_KEY_ALIAS: ${{ secrets.ANWESHA_KEY_ALIAS || 'anwesha_school_key' }}
-          ANWESHA_KEY_PASSWORD: ${{ secrets.ANWESHA_KEY_PASSWORD }}
+          INPUT_KEYSTORE_BASE64: ${{ secrets.ANWESHA_KEYSTORE_BASE64 }}
+          INPUT_KEYSTORE_PASSWORD: ${{ secrets.ANWESHA_KEYSTORE_PASSWORD }}
+          INPUT_KEY_ALIAS: ${{ secrets.ANWESHA_KEY_ALIAS }}
+          INPUT_KEY_PASSWORD: ${{ secrets.ANWESHA_KEY_PASSWORD }}
         run: |
           echo "=========================================="
           echo "PREPARING KEYSTORE & SIGNING CREDENTIALS"
@@ -51,37 +51,80 @@ jobs:
           mkdir -p "$KEYSTORE_DIR"
           KEYSTORE_FILE="$KEYSTORE_DIR/anwesha-release.jks"
 
-          if [ -n "$ANWESHA_KEYSTORE_BASE64" ]; then
-            echo "Using ANWESHA_KEYSTORE_BASE64 from GitHub Secrets."
-            printf '%s' "$ANWESHA_KEYSTORE_BASE64" | tr -d '\r\n ' | base64 -d > "$KEYSTORE_FILE" 2>/dev/null || true
+          # Function to verify if keystore + password + alias are valid
+          verify_keystore_credentials() {
+            local k_file="$1"
+            local k_pass="$2"
+            local k_alias="$3"
+            if [ ! -f "$k_file" ] || [ ! -s "$k_file" ]; then
+              return 1
+            fi
+            if keytool -list -keystore "$k_file" -storepass "$k_pass" -alias "$k_alias" > /dev/null 2>&1; then
+              return 0
+            fi
+            return 1
+          }
+
+          # 1. Attempt using secret base64 if provided
+          if [ -n "$INPUT_KEYSTORE_BASE64" ]; then
+            echo "Attempting to decode ANWESHA_KEYSTORE_BASE64 from GitHub Secrets..."
+            printf '%s' "$INPUT_KEYSTORE_BASE64" | tr -d '\r\n ' | base64 -d > "$KEYSTORE_FILE" 2>/dev/null || true
           fi
 
-          if [ ! -s "$KEYSTORE_FILE" ] && [ -f "anwesha-release.keystore.base64" ]; then
-            echo "Using repository embedded anwesha-release.keystore.base64."
+          # 2. Check if decoded keystore works with provided or default credentials
+          STORE_PASS="${INPUT_KEYSTORE_PASSWORD:-anwesha123}"
+          KEY_ALIAS="${INPUT_KEY_ALIAS:-anwesha_school_key}"
+          KEY_PASS="${INPUT_KEY_PASSWORD:-$STORE_PASS}"
+
+          IS_VALID=false
+          if verify_keystore_credentials "$KEYSTORE_FILE" "$STORE_PASS" "$KEY_ALIAS"; then
+            echo "Keystore verified successfully with provided password and alias."
+            IS_VALID=true
+          elif verify_keystore_credentials "$KEYSTORE_FILE" "anwesha123" "anwesha_school_key"; then
+            echo "Keystore verified successfully with standard anwesha credentials."
+            STORE_PASS="anwesha123"
+            KEY_ALIAS="anwesha_school_key"
+            KEY_PASS="anwesha123"
+            IS_VALID=true
+          fi
+
+          # 3. If invalid, try decoding from repository embedded anwesha-release.keystore.base64
+          if [ "$IS_VALID" != "true" ] && [ -f "anwesha-release.keystore.base64" ]; then
+            echo "Attempting decode from repository embedded anwesha-release.keystore.base64..."
             tr -d '\r\n ' < anwesha-release.keystore.base64 | base64 -d > "$KEYSTORE_FILE" 2>/dev/null || true
+            if verify_keystore_credentials "$KEYSTORE_FILE" "$STORE_PASS" "$KEY_ALIAS"; then
+              echo "Repository keystore verified with configured password."
+              IS_VALID=true
+            elif verify_keystore_credentials "$KEYSTORE_FILE" "anwesha123" "anwesha_school_key"; then
+              echo "Repository keystore verified with standard password (anwesha123)."
+              STORE_PASS="anwesha123"
+              KEY_ALIAS="anwesha_school_key"
+              KEY_PASS="anwesha123"
+              IS_VALID=true
+            fi
           fi
 
-          if [ ! -s "$KEYSTORE_FILE" ] && [ -f "debug.keystore.base64" ]; then
-            echo "Using repository embedded debug.keystore.base64."
-            tr -d '\r\n ' < debug.keystore.base64 | base64 -d > "$KEYSTORE_FILE" 2>/dev/null || true
-          fi
-
-          if [ ! -s "$KEYSTORE_FILE" ]; then
-            echo "Generating fallback signing keystore..."
+          # 4. If still not valid, generate a fresh guaranteed valid release keystore
+          if [ "$IS_VALID" != "true" ]; then
+            echo "Keystore password mismatch or invalid file detected. Generating a fresh guaranteed release keystore..."
+            rm -f "$KEYSTORE_FILE"
+            STORE_PASS="anwesha123"
+            KEY_ALIAS="anwesha_school_key"
+            KEY_PASS="anwesha123"
             keytool -genkeypair -v \
               -keystore "$KEYSTORE_FILE" \
-              -alias "anwesha_school_key" \
+              -alias "$KEY_ALIAS" \
               -keyalg RSA -keysize 2048 -validity 10000 \
-              -storepass "anwesha123" -keypass "anwesha123" \
-              -dname "CN=Anwesha School, OU=App, O=Anwesha, L=Dhaka, ST=Dhaka, C=BD" 2>/dev/null || true
+              -storepass "$STORE_PASS" -keypass "$KEY_PASS" \
+              -dname "CN=Anwesha School, OU=App, O=Anwesha, L=Dhaka, ST=Dhaka, C=BD"
+            echo "Fresh release keystore generated successfully."
           fi
 
-          if [ -s "$KEYSTORE_FILE" ]; then
-            echo "Keystore verified successfully: $KEYSTORE_FILE ($(wc -c < "$KEYSTORE_FILE") bytes)"
-            echo "keystore_path=$KEYSTORE_FILE" >> "$GITHUB_ENV"
-          else
-            echo "Warning: Keystore file could not be created, letting Gradle handle fallback."
-          fi
+          echo "ANWESHA_KEYSTORE_PATH=$KEYSTORE_FILE" >> "$GITHUB_ENV"
+          echo "ANWESHA_KEYSTORE_PASSWORD=$STORE_PASS" >> "$GITHUB_ENV"
+          echo "ANWESHA_KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
+          echo "ANWESHA_KEY_PASSWORD=$KEY_PASS" >> "$GITHUB_ENV"
+          echo "Signing configuration exported to environment."
 
       - name: Setup Gradle 9.3.1
         uses: gradle/actions/setup-gradle@v4

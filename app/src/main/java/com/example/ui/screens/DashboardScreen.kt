@@ -3,8 +3,11 @@ package com.example.ui.screens
 import android.graphics.BitmapFactory
 import android.util.Base64
 import androidx.compose.animation.*
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -14,12 +17,16 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -27,6 +34,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.util.BanglaUtils
@@ -44,7 +52,7 @@ fun DashboardScreen(
 
     // Calculated Dynamic Values
     val totalStudents = students.size
-    val currentStudents = students.filter { it.status == "Current" }
+    val currentStudents = students.filter { it.status == "Current" || it.status == "বর্তমান" || it.status == "Active" || it.status == "সক্রিয়" }
     val totalBoys = currentStudents.count { it.gender == "ছাত্র" }
     val totalGirls = currentStudents.count { it.gender == "ছাত্রী" }
     val specialNeedsCount = currentStudents.count { it.isSpecialNeeds }
@@ -53,9 +61,19 @@ fun DashboardScreen(
     val internalCount = currentStudents.count { viewModel.getStudentCategory(it) == "অভ্যন্তরীণ" }
     val externalCount = currentStudents.count { viewModel.getStudentCategory(it) == "বহিরাগত" }
 
+    // Percentages
+    val effectiveCount = if (currentStudents.isNotEmpty()) currentStudents.size else 1
+    val boyPercentage = (totalBoys * 100f / effectiveCount).toInt()
+    val girlPercentage = 100 - boyPercentage
+    val internalPercentage = (internalCount * 100f / effectiveCount).toInt()
+    val externalPercentage = 100 - internalPercentage
+
     // Classwise count map
     val classCounts = currentStudents.groupBy { it.studentClass }
         .mapValues { it.value.size }
+
+    val defaultClasses = listOf("প্রাক-প্রাথমিক ৪+", "প্রাক-প্রাথমিক ৫+", "১ম শ্রেণি", "২য় শ্রেণি", "৩য় শ্রেণি", "৪র্থ শ্রেণি", "৫ম শ্রেণি")
+    val maxClassCount = (defaultClasses.maxOfOrNull { classCounts[it] ?: 0 } ?: 1).coerceAtLeast(1)
 
     // School Profile Logo
     val schoolLogoBitmap = remember(schoolInfo?.logoUri) {
@@ -79,116 +97,164 @@ fun DashboardScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // School Banner Header
+        // ==========================================
+        // 1. MODERN HERO SCHOOL BANNER
+        // ==========================================
         Card(
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag("dashboard_header_card"),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-            shape = RoundedCornerShape(20.dp),
-            elevation = CardDefaults.cardElevation(2.dp)
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            shape = RoundedCornerShape(16.dp),
+            elevation = CardDefaults.cardElevation(2.dp),
+            border = CardDefaults.outlinedCardBorder(enabled = true)
         ) {
-            Row(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(18.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(16.dp)
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(58.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary),
-                    contentAlignment = Alignment.Center
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    if (schoolLogoBitmap != null) {
-                        Image(
-                            bitmap = schoolLogoBitmap.asImageBitmap(),
-                            contentDescription = "বিদ্যালয়ের প্রোফাইল ছবি",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Filled.School,
-                            contentDescription = "School Logo",
-                            tint = Color.White,
-                            modifier = Modifier.size(32.dp)
-                        )
+                    Box(
+                        modifier = Modifier
+                            .size(54.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(MaterialTheme.colorScheme.primary),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (schoolLogoBitmap != null) {
+                            Image(
+                                bitmap = schoolLogoBitmap.asImageBitmap(),
+                                contentDescription = "বিদ্যালয়ের প্রোফাইল ছবি",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Filled.School,
+                                contentDescription = "School Logo",
+                                tint = Color.White,
+                                modifier = Modifier.size(30.dp)
+                            )
+                        }
                     }
-                }
-                Spacer(modifier = Modifier.width(14.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = schoolInfo?.schoolName ?: "১৫৪ নং পশ্চিম রামপুর সরকারি প্রাথমিক বিদ্যালয়",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                    Text(
-                        text = schoolInfo?.tagline ?: "জ্ঞান, মনন ও স্বপ্নের সোপান",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Text(
-                        text = "EMIS Code: ${schoolInfo?.emisCode ?: "134251"} • প্রধান শিক্ষক: ${schoolInfo?.headTeacherName ?: "মো: রফিকুল ইসলাম"}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    if (!schoolInfo?.email.isNullOrBlank()) {
+
+                    Spacer(modifier = Modifier.width(14.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "ইমেইল: ${schoolInfo?.email}",
+                            text = schoolInfo?.schoolName ?: "১৫৪ নং পশ্চিম রামপুর সরকারি প্রাথমিক বিদ্যালয়",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = schoolInfo?.tagline ?: "জ্ঞান, মনন ও স্বপ্নের সোপান",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.primary,
-                            fontSize = 11.sp
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+
+                    IconButton(
+                        onClick = { onNavigateToSection("settings") },
+                        modifier = Modifier.testTag("btn_dashboard_edit_school")
+                    ) {
+                        Icon(
+                            Icons.Filled.Edit,
+                            contentDescription = "Edit School Info",
+                            tint = MaterialTheme.colorScheme.primary
                         )
                     }
                 }
-                IconButton(
-                    onClick = { onNavigateToSection("settings") },
-                    modifier = Modifier.testTag("btn_dashboard_edit_school")
+
+                Spacer(modifier = Modifier.height(10.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        Icons.Filled.Edit,
-                        contentDescription = "Edit School Info",
-                        tint = MaterialTheme.colorScheme.primary
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Icon(Icons.Filled.Tag, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
+                        Text(
+                            text = "EMIS: ${schoolInfo?.emisCode ?: "134251"}",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Icon(Icons.Filled.Person, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.secondary)
+                        Text(
+                            text = "প্রধান: ${schoolInfo?.headTeacherName ?: "মো: রফিকুল ইসলাম"}",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+
+                    Surface(
+                        color = Color(0xFFE8F5E9),
+                        shape = RoundedCornerShape(6.dp)
+                    ) {
+                        Text(
+                            text = "সেশন ${BanglaUtils.toBanglaDigits(2025)}",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF2E7D32),
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                        )
+                    }
                 }
             }
         }
 
-        // Section Title: Interactive Drill-Down Overview
+        // ==========================================
+        // 2. KEY PERFORMANCE INDICATORS (SOLID M3 CARDS)
+        // ==========================================
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "শিক্ষার্থী সারসংক্ষেপ ও ডেটা বিশ্লেষণ",
+                text = "শিক্ষার্থী সারসংক্ষেপ ও প্রধান পরিসংখ্যান",
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary
             )
             Text(
-                text = "ট্যাপ করে বিস্তারিত দেখুন ➔",
+                text = "ফিল্টার করতে ট্যাপ করুন ➔",
                 fontSize = 11.sp,
                 color = MaterialTheme.colorScheme.primary
             )
         }
 
-        // Summary Grid Row 1: Total, Boys, Girls
+        // Row 1: Total, Boys, Girls
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            SummaryCard(
+            ModernMetricCard(
                 title = "মোট শিক্ষার্থী",
                 value = BanglaUtils.toBanglaDigits(totalStudents),
-                subText = "সকল নথিভুক্ত",
+                badgeText = "সকল নথিভুক্ত",
                 icon = Icons.Filled.Groups,
-                containerColor = Color(0xFFE8F5E9),
-                contentColor = Color(0xFF2E7D32),
+                accentColor = Color(0xFF00695C),
+                containerColor = Color(0xFFE0F2F1),
                 modifier = Modifier.weight(1f),
                 onClick = {
                     viewModel.filterClass.value = null
@@ -197,13 +263,14 @@ fun DashboardScreen(
                     onNavigateToSection("students")
                 }
             )
-            SummaryCard(
+
+            ModernMetricCard(
                 title = "মোট ছাত্র",
                 value = BanglaUtils.toBanglaDigits(totalBoys),
-                subText = "ছেলে শিক্ষার্থী",
+                badgeText = "${BanglaUtils.toBanglaDigits(boyPercentage)}% অনুপাত",
                 icon = Icons.Filled.Male,
+                accentColor = Color(0xFF1565C0),
                 containerColor = Color(0xFFE3F2FD),
-                contentColor = Color(0xFF1565C0),
                 modifier = Modifier.weight(1f),
                 onClick = {
                     viewModel.filterGender.value = "ছাত্র"
@@ -212,13 +279,14 @@ fun DashboardScreen(
                     onNavigateToSection("students")
                 }
             )
-            SummaryCard(
+
+            ModernMetricCard(
                 title = "মোট ছাত্রী",
                 value = BanglaUtils.toBanglaDigits(totalGirls),
-                subText = "মেয়ে শিক্ষার্থী",
+                badgeText = "${BanglaUtils.toBanglaDigits(girlPercentage)}% অনুপাত",
                 icon = Icons.Filled.Female,
+                accentColor = Color(0xFFC2185B),
                 containerColor = Color(0xFFFCE4EC),
-                contentColor = Color(0xFFC2185B),
                 modifier = Modifier.weight(1f),
                 onClick = {
                     viewModel.filterGender.value = "ছাত্রী"
@@ -229,45 +297,48 @@ fun DashboardScreen(
             )
         }
 
-        // Summary Grid Row 2: Special Needs, Internal, External
+        // Row 2: Special Needs, Internal, External
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            SummaryCard(
+            ModernMetricCard(
                 title = "বিশেষ চাহিদা",
                 value = BanglaUtils.toBanglaDigits(specialNeedsCount),
-                subText = "বিশেষ সুবিধাপ্রাপ্ত",
-                icon = Icons.Filled.Accessibility,
+                badgeText = "বিশেষ সেবা",
+                icon = Icons.Filled.Accessible,
+                accentColor = Color(0xFFEF6C00),
                 containerColor = Color(0xFFFFF3E0),
-                contentColor = Color(0xFFEF6C00),
                 modifier = Modifier.weight(1f),
                 onClick = {
                     viewModel.searchQuery.value = ""
                     viewModel.filterClass.value = null
+                    viewModel.filterSpecialNeeds.value = true
                     onNavigateToSection("students")
                 }
             )
-            SummaryCard(
-                title = "অভ্যন্তরীণ শিক্ষার্থী",
+
+            ModernMetricCard(
+                title = "অভ্যন্তরীণ",
                 value = BanglaUtils.toBanglaDigits(internalCount),
-                subText = "স্থানীয় গ্রামসমূহ",
+                badgeText = "${BanglaUtils.toBanglaDigits(internalPercentage)}% ক্যাচমেন্ট",
                 icon = Icons.Filled.Home,
+                accentColor = Color(0xFF6A1B9A),
                 containerColor = Color(0xFFF3E5F5),
-                contentColor = Color(0xFF6A1B9A),
                 modifier = Modifier.weight(1f),
                 onClick = {
                     viewModel.filterClass.value = null
                     onNavigateToSection("students")
                 }
             )
-            SummaryCard(
-                title = "বহিরাগত শিক্ষার্থী",
+
+            ModernMetricCard(
+                title = "বহিরাগত",
                 value = BanglaUtils.toBanglaDigits(externalCount),
-                subText = "বাইরের গ্রামসমূহ",
+                badgeText = "${BanglaUtils.toBanglaDigits(externalPercentage)}% বাইরের",
                 icon = Icons.Filled.DirectionsBus,
+                accentColor = Color(0xFF283593),
                 containerColor = Color(0xFFEDE7F6),
-                contentColor = Color(0xFF4527A0),
                 modifier = Modifier.weight(1f),
                 onClick = {
                     viewModel.filterClass.value = null
@@ -276,60 +347,377 @@ fun DashboardScreen(
             )
         }
 
-        // Classwise breakdown chips (with instant drill-down filter)
+        // ==========================================
+        // 3. CLASS-WISE ENROLLMENT BAR CHART & GRAPH
+        // ==========================================
         Card(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("dashboard_class_chart_card"),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            shape = RoundedCornerShape(14.dp),
-            elevation = CardDefaults.cardElevation(2.dp)
+            shape = RoundedCornerShape(16.dp),
+            elevation = CardDefaults.cardElevation(2.dp),
+            border = CardDefaults.outlinedCardBorder(enabled = true)
         ) {
-            Column(modifier = Modifier.padding(14.dp)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "শ্রেণিভিত্তিক শিক্ষার্থী (ফিল্টার করতে ট্যাপ করুন):",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Column {
+                        Text(
+                            text = "শ্রেণিভিত্তিক শিক্ষার্থী বিশ্লেষণ চার্ট",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "নির্দিষ্ট শ্রেণিতে সরাসরি যেতে বারে ট্যাপ করুন",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    Surface(
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text(
+                            text = "৭টি শ্রেণি",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
                 }
-                Spacer(modifier = Modifier.height(8.dp))
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Custom Visual Bar Graph
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(160.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.Bottom
+                ) {
+                    val barColors = listOf(
+                        Color(0xFF00897B),
+                        Color(0xFF00ACC1),
+                        Color(0xFF1E88E5),
+                        Color(0xFF5E35B1),
+                        Color(0xFF8E24AA),
+                        Color(0xFFD81B60),
+                        Color(0xFFE53935)
+                    )
+
+                    defaultClasses.forEachIndexed { index, className ->
+                        val count = classCounts[className] ?: 0
+                        val fraction = if (maxClassCount > 0) (count.toFloat() / maxClassCount).coerceIn(0.08f, 1f) else 0.08f
+                        val color = barColors[index % barColors.size]
+
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                                .clickable {
+                                    viewModel.filterClass.value = className
+                                    viewModel.filterGender.value = null
+                                    viewModel.filterStatus.value = "Current"
+                                    onNavigateToSection("students")
+                                },
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Bottom
+                        ) {
+                            // Value Pill
+                            Surface(
+                                color = if (count > 0) color.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant,
+                                shape = RoundedCornerShape(4.dp)
+                            ) {
+                                Text(
+                                    text = BanglaUtils.toBanglaDigits(count),
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (count > 0) color else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(6.dp))
+
+                            // Vertical Bar
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth(0.65f)
+                                    .fillMaxHeight(fraction)
+                                    .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp))
+                                    .background(color)
+                            )
+
+                            Spacer(modifier = Modifier.height(6.dp))
+
+                            // Short Class Name
+                            val shortName = when (className) {
+                                "প্রাক-প্রাথমিক ৪+" -> "প্রাক ৪+"
+                                "প্রাক-প্রাথমিক ৫+" -> "প্রাক ৫+"
+                                "১ম শ্রেণি" -> "১ম"
+                                "২য় শ্রেণি" -> "২য়"
+                                "৩য় শ্রেণি" -> "৩য়"
+                                "৪র্থ শ্রেণি" -> "৪র্থ"
+                                "৫ম শ্রেণি" -> "৫ম"
+                                else -> className
+                            }
+
+                            Text(
+                                text = shortName,
+                                fontSize = 10.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Scrollable Fast Filter Chips
                 LazyRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    val defaultClasses = listOf("প্রাক-প্রাথমিক ৪+", "প্রাক-প্রাথমিক ৫+", "১ম শ্রেণি", "২য় শ্রেণি", "৩য় শ্রেণি", "৪র্থ শ্রেণি", "৫ম শ্রেণি")
                     items(defaultClasses) { className ->
                         val count = classCounts[className] ?: 0
-                        AssistChip(
-                            onClick = {
-                                viewModel.filterClass.value = className
-                                viewModel.filterGender.value = null
-                                onNavigateToSection("students")
-                            },
-                            label = { Text("$className: ${BanglaUtils.toBanglaDigits(count)} জন", fontSize = 12.sp) },
-                            leadingIcon = { Icon(Icons.Filled.Class, contentDescription = null, modifier = Modifier.size(15.dp)) }
-                        )
+                        Surface(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable {
+                                    viewModel.filterClass.value = className
+                                    viewModel.filterGender.value = null
+                                    viewModel.filterStatus.value = "Current"
+                                    onNavigateToSection("students")
+                                },
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                            border = CardDefaults.outlinedCardBorder(enabled = true)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            ) {
+                                Icon(Icons.Filled.Class, contentDescription = null, modifier = Modifier.size(13.dp), tint = MaterialTheme.colorScheme.primary)
+                                Text(
+                                    text = "$className (${BanglaUtils.toBanglaDigits(count)})",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
                     }
                 }
             }
         }
 
-        // Quick Actions Section Title
+        // ==========================================
+        // 4. GENDER & CATCHMENT RATIO VISUALIZERS
+        // ==========================================
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // Gender Ratio Card
+            Card(
+                modifier = Modifier
+                    .weight(1f)
+                    .testTag("dashboard_gender_ratio_card"),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                shape = RoundedCornerShape(16.dp),
+                elevation = CardDefaults.cardElevation(2.dp),
+                border = CardDefaults.outlinedCardBorder(enabled = true)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "লিঙ্গ অনুপাত",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Icon(Icons.Filled.PieChart, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Segmented Ratio Bar
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(10.dp)
+                            .clip(CircleShape)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .weight((totalBoys.coerceAtLeast(1)).toFloat())
+                                .fillMaxHeight()
+                                .background(Color(0xFF1976D2))
+                        )
+                        Box(
+                            modifier = Modifier
+                                .weight((totalGirls.coerceAtLeast(1)).toFloat())
+                                .fillMaxHeight()
+                                .background(Color(0xFFC2185B))
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(Color(0xFF1976D2)))
+                            Text("ছাত্র: ${BanglaUtils.toBanglaDigits(boyPercentage)}%", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                        }
+
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(Color(0xFFC2185B)))
+                            Text("ছাত্রী: ${BanglaUtils.toBanglaDigits(girlPercentage)}%", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                }
+            }
+
+            // Catchment Area Card
+            Card(
+                modifier = Modifier
+                    .weight(1f)
+                    .testTag("dashboard_catchment_card"),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                shape = RoundedCornerShape(16.dp),
+                elevation = CardDefaults.cardElevation(2.dp),
+                border = CardDefaults.outlinedCardBorder(enabled = true)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "ক্যাচমেন্ট এলাকা",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Icon(Icons.Filled.LocationOn, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color(0xFF6A1B9A))
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Segmented Catchment Bar
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(10.dp)
+                            .clip(CircleShape)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .weight((internalCount.coerceAtLeast(1)).toFloat())
+                                .fillMaxHeight()
+                                .background(Color(0xFF6A1B9A))
+                        )
+                        Box(
+                            modifier = Modifier
+                                .weight((externalCount.coerceAtLeast(1)).toFloat())
+                                .fillMaxHeight()
+                                .background(Color(0xFFEF6C00))
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(Color(0xFF6A1B9A)))
+                            Text("অভ্যন্তর: ${BanglaUtils.toBanglaDigits(internalPercentage)}%", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                        }
+
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(Color(0xFFEF6C00)))
+                            Text("বহিরাগত: ${BanglaUtils.toBanglaDigits(externalPercentage)}%", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                }
+            }
+        }
+
+        // ==========================================
+        // 5. QUICK ACTIONS HUB (MODERN SOLID GRID)
+        // ==========================================
         Text(
-            text = "দ্রুত কার্যক্রম (Quick Actions)",
+            text = "দ্রুত কার্যক্রম ও টুলস (Quick Actions)",
             style = MaterialTheme.typography.titleSmall,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary
         )
 
-        // Clean, Focused Quick Actions Grid
         val quickActions = listOf(
-            QuickActionItem("শিক্ষার্থী তালিকা", Icons.Filled.People, "students", Color(0xFF00695C)),
-            QuickActionItem("টুলস ও প্রবেশপত্র মেকার", Icons.Filled.Widgets, "tools_hub", Color(0xFF4F46E5)),
-            QuickActionItem("বিদ্যালয়ের তথ্য ও প্রোফাইল", Icons.Filled.School, "settings", Color(0xFFD81B60)),
-            QuickActionItem("ডেটা রিপোর্ট ও এক্সপোর্ট", Icons.Filled.FileDownload, "settings", Color(0xFF1565C0))
+            ModernQuickActionItem(
+                label = "শিক্ষার্থী তালিকা ও ব্যবস্থাপনা",
+                subLabel = "তথ্য দেখা, এডিট ও কাস্টমাইজেশন",
+                icon = Icons.Filled.People,
+                targetRoute = "students",
+                accentColor = Color(0xFF00695C),
+                bgCol = Color(0xFFE0F2F1)
+            ),
+            ModernQuickActionItem(
+                label = "প্রবেশপত্র ও আইডি কার্ড মেকার",
+                subLabel = "ডিজিটাল কার্ড জেনারেশন ও প্রিন্ট",
+                icon = Icons.Filled.Badge,
+                targetRoute = "tools_hub",
+                accentColor = Color(0xFF4338CA),
+                bgCol = Color(0xFFEDE9FE)
+            ),
+            ModernQuickActionItem(
+                label = "আসন বিন্যাস ও টুলস হাব",
+                subLabel = "পরীক্ষা রুম প্ল্যান ও সার্টিফিকেট",
+                icon = Icons.Filled.Widgets,
+                targetRoute = "tools_hub",
+                accentColor = Color(0xFFB45309),
+                bgCol = Color(0xFFFEF3C7)
+            ),
+            ModernQuickActionItem(
+                label = "বিদ্যালয় তথ্য ও ডেটা সেটিংস",
+                subLabel = "প্রোফাইল, থিম ও ডেটা ব্যাকআপ",
+                icon = Icons.Filled.School,
+                targetRoute = "settings",
+                accentColor = Color(0xFFBE185D),
+                bgCol = Color(0xFFFCE7F3)
+            )
         )
 
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -339,7 +727,7 @@ fun DashboardScreen(
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     rowItems.forEach { action ->
-                        QuickActionButton(
+                        ModernQuickActionCard(
                             item = action,
                             onClick = { onNavigateToSection(action.targetRoute) },
                             modifier = Modifier.weight(1f)
@@ -353,14 +741,18 @@ fun DashboardScreen(
     }
 }
 
+// ==========================================
+// COMPONENT HELPERS
+// ==========================================
+
 @Composable
-fun SummaryCard(
+fun ModernMetricCard(
     title: String,
     value: String,
-    subText: String,
+    badgeText: String,
     icon: ImageVector,
+    accentColor: Color,
     containerColor: Color,
-    contentColor: Color,
     modifier: Modifier = Modifier,
     onClick: () -> Unit = {}
 ) {
@@ -368,92 +760,137 @@ fun SummaryCard(
         modifier = modifier
             .clickable { onClick() }
             .testTag("summary_card_${title}"),
-        colors = CardDefaults.cardColors(containerColor = containerColor),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         shape = RoundedCornerShape(14.dp),
-        elevation = CardDefaults.cardElevation(2.dp)
+        elevation = CardDefaults.cardElevation(2.dp),
+        border = CardDefaults.outlinedCardBorder(enabled = true)
     ) {
         Column(
             modifier = Modifier
-                .padding(12.dp)
-                .fillMaxWidth(),
+                .fillMaxWidth()
+                .padding(12.dp),
             horizontalAlignment = Alignment.Start
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = title,
-                tint = contentColor,
-                modifier = Modifier.size(24.dp)
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(34.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(containerColor),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = title,
+                        tint = accentColor,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+
+                Surface(
+                    color = containerColor,
+                    shape = RoundedCornerShape(4.dp)
+                ) {
+                    Text(
+                        text = badgeText,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = accentColor,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                    )
+                }
+            }
+
             Spacer(modifier = Modifier.height(8.dp))
+
             Text(
                 text = value,
-                fontSize = 20.sp,
+                fontSize = 22.sp,
                 fontWeight = FontWeight.Bold,
-                color = contentColor
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1
             )
+
             Text(
                 text = title,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = contentColor.copy(alpha = 0.9f)
-            )
-            Text(
-                text = subText,
-                fontSize = 10.sp,
-                color = contentColor.copy(alpha = 0.7f)
+                fontSize = 11.5.sp,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
 }
 
-data class QuickActionItem(
+data class ModernQuickActionItem(
     val label: String,
+    val subLabel: String,
     val icon: ImageVector,
     val targetRoute: String,
-    val accentColor: Color
+    val accentColor: Color,
+    val bgCol: Color
 )
 
 @Composable
-fun QuickActionButton(
-    item: QuickActionItem,
+fun ModernQuickActionCard(
+    item: ModernQuickActionItem,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Card(
         modifier = modifier
-            .height(90.dp)
             .clickable { onClick() }
             .testTag("btn_quick_action_${item.targetRoute}"),
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(2.dp)
+        elevation = CardDefaults.cardElevation(2.dp),
+        border = CardDefaults.outlinedCardBorder(enabled = true)
     ) {
-        Row(
+        Column(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                .fillMaxWidth()
+                .padding(12.dp)
         ) {
             Box(
                 modifier = Modifier
-                    .size(44.dp)
-                    .clip(CircleShape)
-                    .background(item.accentColor.copy(alpha = 0.15f)),
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(item.bgCol),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = item.icon,
                     contentDescription = item.label,
                     tint = item.accentColor,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(22.dp)
                 )
             }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
             Text(
                 text = item.label,
-                fontSize = 13.sp,
+                fontSize = 12.5.sp,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            Text(
+                text = item.subLabel,
+                fontSize = 10.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }

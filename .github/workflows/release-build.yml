@@ -28,29 +28,77 @@ jobs:
         with:
           gradle-version: '9.3.1'
 
-      - name: Decode Keystore
+      - name: Decode & Verify Keystore
         env:
-          ANWESHA_KEYSTORE_BASE64: ${{ secrets.ANWESHA_KEYSTORE_BASE64 }}
+          INPUT_KEYSTORE_BASE64: ${{ secrets.ANWESHA_KEYSTORE_BASE64 }}
+          INPUT_KEYSTORE_PASSWORD: ${{ secrets.ANWESHA_KEYSTORE_PASSWORD }}
+          INPUT_KEY_ALIAS: ${{ secrets.ANWESHA_KEY_ALIAS }}
+          INPUT_KEY_PASSWORD: ${{ secrets.ANWESHA_KEY_PASSWORD }}
         run: |
           mkdir -p "${{ runner.temp }}/keystore"
           KEYSTORE_FILE="${{ runner.temp }}/keystore/anwesha-release.jks"
-          if [ -n "$ANWESHA_KEYSTORE_BASE64" ]; then
-            printf '%s' "$ANWESHA_KEYSTORE_BASE64" | tr -d '\r\n ' | base64 -d > "$KEYSTORE_FILE" 2>/dev/null || true
+
+          # Function to verify if keystore + password + alias are valid
+          verify_keystore_credentials() {
+            local k_file="$1"
+            local k_pass="$2"
+            local k_alias="$3"
+            if [ ! -f "$k_file" ] || [ ! -s "$k_file" ]; then
+              return 1
+            fi
+            if keytool -list -keystore "$k_file" -storepass "$k_pass" -alias "$k_alias" > /dev/null 2>&1; then
+              return 0
+            fi
+            return 1
+          }
+
+          if [ -n "$INPUT_KEYSTORE_BASE64" ]; then
+            printf '%s' "$INPUT_KEYSTORE_BASE64" | tr -d '\r\n ' | base64 -d > "$KEYSTORE_FILE" 2>/dev/null || true
           fi
-          if [ ! -s "$KEYSTORE_FILE" ] && [ -f "anwesha-release.keystore.base64" ]; then
+
+          STORE_PASS="${INPUT_KEYSTORE_PASSWORD:-anwesha123}"
+          KEY_ALIAS="${INPUT_KEY_ALIAS:-anwesha_school_key}"
+          KEY_PASS="${INPUT_KEY_PASSWORD:-$STORE_PASS}"
+
+          IS_VALID=false
+          if verify_keystore_credentials "$KEYSTORE_FILE" "$STORE_PASS" "$KEY_ALIAS"; then
+            IS_VALID=true
+          elif verify_keystore_credentials "$KEYSTORE_FILE" "anwesha123" "anwesha_school_key"; then
+            STORE_PASS="anwesha123"
+            KEY_ALIAS="anwesha_school_key"
+            KEY_PASS="anwesha123"
+            IS_VALID=true
+          fi
+
+          if [ "$IS_VALID" != "true" ] && [ -f "anwesha-release.keystore.base64" ]; then
             tr -d '\r\n ' < anwesha-release.keystore.base64 | base64 -d > "$KEYSTORE_FILE" 2>/dev/null || true
+            if verify_keystore_credentials "$KEYSTORE_FILE" "$STORE_PASS" "$KEY_ALIAS"; then
+              IS_VALID=true
+            elif verify_keystore_credentials "$KEYSTORE_FILE" "anwesha123" "anwesha_school_key"; then
+              STORE_PASS="anwesha123"
+              KEY_ALIAS="anwesha_school_key"
+              KEY_PASS="anwesha123"
+              IS_VALID=true
+            fi
           fi
-          if [ ! -s "$KEYSTORE_FILE" ] && [ -f "debug.keystore.base64" ]; then
-            tr -d '\r\n ' < debug.keystore.base64 | base64 -d > "$KEYSTORE_FILE" 2>/dev/null || true
-          fi
-          if [ ! -s "$KEYSTORE_FILE" ]; then
+
+          if [ "$IS_VALID" != "true" ]; then
+            rm -f "$KEYSTORE_FILE"
+            STORE_PASS="anwesha123"
+            KEY_ALIAS="anwesha_school_key"
+            KEY_PASS="anwesha123"
             keytool -genkeypair -v \
               -keystore "$KEYSTORE_FILE" \
-              -alias "anwesha_school_key" \
+              -alias "$KEY_ALIAS" \
               -keyalg RSA -keysize 2048 -validity 10000 \
-              -storepass "anwesha123" -keypass "anwesha123" \
-              -dname "CN=Anwesha School, OU=App, O=Anwesha, L=Dhaka, ST=Dhaka, C=BD" 2>/dev/null || true
+              -storepass "$STORE_PASS" -keypass "$KEY_PASS" \
+              -dname "CN=Anwesha School, OU=App, O=Anwesha, L=Dhaka, ST=Dhaka, C=BD"
           fi
+
+          echo "ANWESHA_KEYSTORE_PATH=$KEYSTORE_FILE" >> "$GITHUB_ENV"
+          echo "ANWESHA_KEYSTORE_PASSWORD=$STORE_PASS" >> "$GITHUB_ENV"
+          echo "ANWESHA_KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
+          echo "ANWESHA_KEY_PASSWORD=$KEY_PASS" >> "$GITHUB_ENV"
 
       - name: Setup Environment File
         run: |
@@ -62,10 +110,10 @@ jobs:
 
       - name: Build Signed Release APK
         env:
-          ANWESHA_KEYSTORE_PATH: ${{ runner.temp }}/keystore/anwesha-release.jks
-          ANWESHA_KEYSTORE_PASSWORD: ${{ secrets.ANWESHA_KEYSTORE_PASSWORD || 'anwesha123' }}
-          ANWESHA_KEY_ALIAS: ${{ secrets.ANWESHA_KEY_ALIAS || 'anwesha_school_key' }}
-          ANWESHA_KEY_PASSWORD: ${{ secrets.ANWESHA_KEY_PASSWORD || secrets.ANWESHA_KEYSTORE_PASSWORD || 'anwesha123' }}
+          ANWESHA_KEYSTORE_PATH: ${{ env.ANWESHA_KEYSTORE_PATH }}
+          ANWESHA_KEYSTORE_PASSWORD: ${{ env.ANWESHA_KEYSTORE_PASSWORD }}
+          ANWESHA_KEY_ALIAS: ${{ env.ANWESHA_KEY_ALIAS }}
+          ANWESHA_KEY_PASSWORD: ${{ env.ANWESHA_KEY_PASSWORD }}
         run: |
           gradle :app:assembleRelease --stacktrace --no-daemon --no-configuration-cache
 

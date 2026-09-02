@@ -52,11 +52,11 @@ object FormulaEvaluator {
             "birthregnumber", "birth_reg", "জন্ম নিবন্ধন নম্বর" -> student.birthRegNumber
             "isspecialneeds", "বিশেষ চাহিদা" -> if (student.isSpecialNeeds) "হ্যাঁ" else "না"
             "status", "স্ট্যাটাস" -> when (student.status) {
-                "Current" -> "বর্তমান"
-                "Former" -> "সাবেক"
-                "Transferred" -> "বদলীকৃত"
-                "Inactive" -> "নিষ্ক্রিয়"
-                else -> student.status
+                "Current", "Active", "সক্রিয়" -> "বর্তমান"
+                "Former", "সাবেক" -> "সাবেক"
+                "Transferred", "বদলীকৃত" -> "বদলীকৃত"
+                "Inactive", "নিষ্ক্রিয়" -> "নিষ্ক্রিয়"
+                else -> if (student.status == "Active" || student.status == "সক্রিয়") "বর্তমান" else student.status
             }
             "category", "ধরণ", "শিক্ষার্থীর ধরণ" -> {
                 val rule = formulaRules.firstOrNull { it.targetFieldName == "শিক্ষার্থীর ধরণ" || it.sourceField == "village" }
