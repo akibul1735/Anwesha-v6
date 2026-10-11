@@ -356,9 +356,19 @@ fun MainScreenContainer(viewModel: MainViewModel) {
                         viewModel = viewModel,
                         onNavigateToDashboard = { navigateTo(Screen.Dashboard.route) }
                     )
+                    "tools_hub/attendance_report" -> ToolsHubScreen(
+                        viewModel = viewModel,
+                        initialToolRoute = "attendance_report",
+                        onNavigateToDashboard = { navigateTo(Screen.Dashboard.route) }
+                    )
                     "tools_hub/admit_card" -> ToolsHubScreen(
                         viewModel = viewModel,
                         initialToolRoute = "admit_card_maker",
+                        onNavigateToDashboard = { navigateTo(Screen.Dashboard.route) }
+                    )
+                    "tools_hub/seat_plan" -> ToolsHubScreen(
+                        viewModel = viewModel,
+                        initialToolRoute = "seat_plan_maker",
                         onNavigateToDashboard = { navigateTo(Screen.Dashboard.route) }
                     )
                     "tools_hub/certificate_maker" -> ToolsHubScreen(
